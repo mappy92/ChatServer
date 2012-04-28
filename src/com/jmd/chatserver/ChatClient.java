@@ -1,4 +1,4 @@
-package com.jmd.chatserver;
+1package com.jmd.chatserver;
 
 public class ChatClient {
 

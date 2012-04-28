@@ -1,6 +1,8 @@
 package com.jmd.chatserver;
 
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.SimpleDateFormat;
@@ -15,6 +17,8 @@ public class ChatServer {
 	private ChatServerGUI chatServerGUI;	
 	private String host;
 	private int port;
+	private static int defaultPort = 2000;
+	private static int uniqueID;	
 	private boolean running;
 	private SimpleDateFormat sdf;
 
@@ -24,12 +28,13 @@ public class ChatServer {
 	
 	
 	ChatServer(){				
-		this("localhost", 2000, null);
+		this(defaultPort, null);
 	}
-	ChatServer(String h, int p, ChatServerGUI csg){
-		host = h;
-		port = p;
-		
+	ChatServer(int p){		
+		this(p, null);
+	}
+	ChatServer(int p, ChatServerGUI csg){		
+		port = p;		
 		//will be null if started from terminal, otherwise hold reference to GUI that started server
 		chatServerGUI = csg;
 		clientList = new ArrayList<ClientThread>();
@@ -40,9 +45,11 @@ public class ChatServer {
 		running = true;
 		try{
 			serverSocket = new ServerSocket(port);
+			displayMessage("Starting server on port " + port);
+			
 			while(running){
 				//loop until told to stop
-				displayMessage(sdf.format(new Date()) + ": Waiting for clients on port " + port);
+				displayMessage("Waiting for clients on port " + port);
 				
 				//create new socket connection
 				Socket socket = serverSocket.accept();
@@ -70,16 +77,19 @@ public class ChatServer {
 					ct.close();					
 				}				
 			}catch(IOException e){
-				String msg = sdf.format(new Date()) + ": Exception thrown closing ServerSocket: " + e + "\n";
+				String msg = "Exception thrown closing ServerSocket: " + e + "\n";
 				displayMessage(msg);	
 			}
 		}catch(IOException e){
-			String msg = sdf.format(new Date()) + ": Exception thrown opening ServerSocket: " + e + "\n";
+			String msg = "Exception thrown opening ServerSocket: " + e + "\n";
 			displayMessage(msg);
 		}		
 	}
 	
 	private void displayMessage(String msg){		
+		//timestamp message
+		String timestamp = sdf.format(new Date()) + ": ";
+		msg = timestamp + msg;
 		//if there's no GUI, write to console, else write to GUI
 		if(chatServerGUI == null){
 			System.out.println(msg);
@@ -107,39 +117,91 @@ public class ChatServer {
 			if(!t.writeMessage(stampedMSG)){
 				t.close();
 				clientList.remove(i);
-				displayMessage(timestamp + ": Removing " + t.getUser() + " from server.");
+				displayMessage(timestamp + ": Removing " + t.userName + " from server.");
 			}
 		}
 	}
 	
+	protected void stop(){
+		running = false;		
+	}
+	synchronized void remove(int id){
+		for(int i = 0; i < clientList.size(); i++){
+			ClientThread t = clientList.get(i);
+			if(t.id == id){
+				t.close();
+				clientList.remove(i);
+			}
+		}
+	}
 	
-	
-	
-	
-	
-	class ClientThread extends Thread{
-		private String userName;
-		
-		ClientThread(){
-			
+	public static void main(String[] args){
+		//if there's no port specified we'll use the default port
+		int portNumber = defaultPort;
+		if(args.length==1){//if there's one argument, try to parse it for an int
+			try{
+				portNumber = Integer.parseInt(args[0]);
+			}catch(Exception e){
+				System.out.println("Exception parsing port number");
+				e.printStackTrace();
+				System.out.println("\nSpecify port number with: >java ChatServer [port number]");
+			}						
+		}else if(args.length==0){			
+			// do nothing
+		}else{
+			System.out.println("Specify port number with: >java ChatServer [port number]");
+			return;
 		}
 		
-		public ClientThread(Socket socket) {
-			// TODO Auto-generated constructor stub
+		ChatServer server = new ChatServer(portNumber);
+		server.start();	
+		
+	}
+	
+	class ClientThread extends Thread{
+		//IO Items, object streams because we'll construct our own message object
+		Socket socket;
+		ObjectInputStream oInput;
+		ObjectOutputStream oOutput;		
+		
+		private int id;
+		private String userName;
+		
+		ChatMessage cm;
+		String date;	
+		
+		
+		ClientThread(Socket socket) {
+			this.socket = socket;
+			id = ++uniqueID;
+			
+			try{
+				oInput = new ObjectInputStream(socket.getInputStream());
+				oOutput = new ObjectOutputStream(socket.getOutputStream());				
+				//when the client connects, the first thing sent will be the username, so we grab that now
+				userName = (String) oInput.readObject();
+				displayMessage(userName + " has connected");
+			}catch(IOException e){
+				System.out.println("Could not create Input/Output stream: " + e);
+				e.printStackTrace();
+			} catch (ClassNotFoundException e) {
+				System.out.println("Error reading username... for some reason");
+				e.printStackTrace();
+			}			
+			date = sdf.format(new Date());
 		}
 
 		public void run(){
-			
+			//TODO
 		}
 		private void close(){
-			
+			//TODO
 		}
 		private boolean writeMessage(String msg){
+			//TODO
 			return true;
 		}
-		private String getUser(){
-			return userName;
-		}
+
 
 		
 	}
